@@ -1,0 +1,8 @@
+.DS_Store
+.data
+.debug
+ADAClient*
+Assembly*
+/Library
+/ProjectSettings
+/Temp
