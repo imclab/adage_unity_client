@@ -192,6 +192,7 @@ namespace HTTP
 			
         public void Send ()
         {
+			Debug.Log("sending");
         	isDone = false;
         	state = RequestState.Waiting;
         	if (acceptGzip) {
@@ -228,6 +229,7 @@ namespace HTTP
         	        			response.ReadFromStream(ostream);
         	        		}
         	        		client.Close ();
+        	        		retry = maximumRetryCount;
         	        		/*switch (response.status) {
         	        		case 307:
         	        		case 302:
