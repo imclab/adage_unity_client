@@ -66,7 +66,7 @@ public class UploadWrapper
 		if(data == null)
 			data = new List<ADAGEData>();
 		
-		if(data.Count == 0 || data[data.Count] != newData)
+		if(data.Count == 0 || data[data.Count - 1] != newData)
 		{
 			data.Add(newData);	
 		}
@@ -131,7 +131,9 @@ public class ADAGE : MonoBehaviour
 		}
 	}
 	
+
 	public static Dictionary<string, string> AuthenticationParameters = new Dictionary<string, string>();
+
 
 	
 	public static ADAGEVirtualContext VirtualContext
@@ -180,6 +182,8 @@ public class ADAGE : MonoBehaviour
 	private ADAGEPositionalContext pContext;
 	
 
+	private Dictionary<string, ADAGECamera> cameras;
+
 	
 	public static void LogData<T>(T data) where T:ADAGEData
 	{
@@ -188,7 +192,35 @@ public class ADAGE : MonoBehaviour
 			string message = string.Format("ADAGE WARNING: Method 'ADAGE.LogData' should not be used to track progression object '{0}'. Please use the ADAGE.LogContext method", data.GetType().ToString());
 			Debug.LogWarning(message);	
 		}
+		else if(ReflectionUtils.CompareType(data.GetType(), (typeof(ADAGEScreenshot))))
+		{
+			ADAGEScreenshot shotData = data as ADAGEScreenshot;
+			if(instance.cameras != null && instance.cameras.ContainsKey(shotData.cameraName))
+			{
+				ADAGECamera cam = instance.cameras[shotData.cameraName];
+				if(cam.camera != null)
+				{
+					shotData.shot = instance.TakeScreenshot(cam.camera);
+				}
+				else
+				{
+					string message = string.Format("ADAGE WARNING: Cannot log screenshot from source '{0}' because no Unity3D camera is present.", shotData.cameraName);
+					Debug.LogWarning(message);	
+				}
+			}
+			else
+			{
+				string message = string.Format("ADAGE WARNING: Cannot log screenshot from source '{0}' because the camera has not been registered with ADAGE. Did you add the ADAGECamera object to the camera?", shotData.cameraName);
+				Debug.LogWarning(message);	
+			}
+		}
+		
 		instance.AddData<T>(data);
+	}
+	
+	public static void GetData<T>(WebJob job)
+	{
+		
 	}
 	
 	public static void LogContext<T>(T data) where T:ADAGEContext
@@ -296,6 +328,14 @@ public class ADAGE : MonoBehaviour
 #endif
 	
 	
+	public static void AddCamera(ADAGECamera camera)
+	{
+		if(instance.cameras == null)
+			instance.cameras = new Dictionary<string, ADAGECamera>();
+		
+		instance.cameras[camera.cameraName] = camera;
+	}
+	
 	public void Awake()
 	{
 		if(instance != null) 
@@ -307,6 +347,7 @@ public class ADAGE : MonoBehaviour
 		
 		threads = new WorkerPool(3);
 		dataWrapper = new UploadWrapper();
+		cameras = new Dictionary<string, ADAGECamera>();
 		
 		vContext = new ADAGEVirtualContext(Application.loadedLevelName);
 		
@@ -327,14 +368,9 @@ public class ADAGE : MonoBehaviour
 	}
 	
 	public void Start()
-	{	
 
-		
-		
-		
-		ADAGEStartGame s = new ADAGEStartGame();
-		Debug.Log(s);
-		
+	{			
+
 		//Start the session
 		currentSession = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
 		
@@ -354,8 +390,10 @@ public class ADAGE : MonoBehaviour
 		//Temp
 		UpdatePositionalContext(Vector3.zero,Vector3.zero);
 		ADAGEStartGame log_start = new ADAGEStartGame();
+
 		LogData<ADAGEStartGame>(log_start);
 		
+
 	}
 
 	public void Update()
@@ -374,7 +412,7 @@ public class ADAGE : MonoBehaviour
 			AddLogJob();
 		}
 	}
-	
+		
 	public void OnLevelWasLoaded(int level) 
 	{
 		vContext.level = Application.loadedLevelName;
@@ -525,7 +563,8 @@ public class ADAGE : MonoBehaviour
 	{
 		ADAGEUploadJob upload = (job as ADAGEUploadJob);
 
-		if(upload.Status != 302)  //NEEDS TO CHANGE TO 200 SOMEDAY
+	
+		if(upload.Status != 201) 
 		{
 			Debug.Log ("Adding Data to Local Wrapper");
 			
@@ -584,7 +623,7 @@ public class ADAGE : MonoBehaviour
 	{
 		ADAGEUploadFileJob upload = (job as ADAGEUploadFileJob);
 		
-		if(upload.Status == 200)
+		if(upload.Status == 201)
 		{
 			File.Delete(upload.Path);	
 		}
@@ -639,6 +678,7 @@ public class ADAGE : MonoBehaviour
 		}
 	}
 	
+
 #if FACEBOOK_SUPPORT
 	private void BeginFacebookAuth()
 	{
@@ -742,4 +782,26 @@ public class ADAGE : MonoBehaviour
 	}
 
 	
+
+	private byte[] TakeScreenshot(Camera cam)
+	{
+		Texture2D tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+		
+		// Initialize and render
+		RenderTexture rt = new RenderTexture(Screen.width, Screen.height, 24);
+		cam.targetTexture = rt;
+		cam.Render();
+		RenderTexture.active = rt;
+		 
+		// Read pixels
+		tex.ReadPixels(new Rect(0,0,Screen.width,Screen.height), 0, 0);
+		 
+		// Clean up
+		cam.targetTexture = null;
+		RenderTexture.active = null; 
+		DestroyImmediate(rt);
+		
+		return tex.EncodeToPNG();
+	}
+
 }

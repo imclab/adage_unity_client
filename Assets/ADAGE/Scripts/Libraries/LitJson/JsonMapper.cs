@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using UnityEngine;
 
 
 namespace LitJson
@@ -116,21 +117,21 @@ namespace LitJson
                 IDictionary<Type, ImporterFunc>> custom_importers_table;
 
         private static IDictionary<Type, ArrayMetadata> array_metadata;
-        private static readonly object array_metadata_lock = new Object ();
+        private static readonly object array_metadata_lock = new System.Object ();
 
         private static IDictionary<Type,
                 IDictionary<Type, MethodInfo>> conv_ops;
-        private static readonly object conv_ops_lock = new Object ();
+        private static readonly object conv_ops_lock = new System.Object ();
 
         private static IDictionary<Type, ObjectMetadata> object_metadata;
-        private static readonly object object_metadata_lock = new Object ();
+        private static readonly object object_metadata_lock = new System.Object ();
 
         private static IDictionary<Type,
                 IList<PropertyMetadata>> type_properties;
-        private static readonly object type_properties_lock = new Object ();
+        private static readonly object type_properties_lock = new System.Object ();
 
         private static JsonWriter      static_writer;
-        private static readonly object static_writer_lock = new Object ();
+        private static readonly object static_writer_lock = new System.Object ();
         #endregion
 
 
@@ -349,8 +350,8 @@ namespace LitJson
                 return null;
             }
 			
-			//UnityEngine.Debug.Log (inst_type.ToString());
-			//UnityEngine.Debug.Log (reader.Token);
+			/*UnityEngine.Debug.Log (inst_type.ToString());
+			UnityEngine.Debug.Log (reader.Token);*/
 				
             if (reader.Token == JsonToken.Double ||
                 reader.Token == JsonToken.Int ||
@@ -442,35 +443,48 @@ namespace LitJson
                 } else
                     instance = list;
 
-            } else if (reader.Token == JsonToken.ObjectStart) {
-								
-				// If there's a custom importer that fits, use it
-                if (custom_importers_table.ContainsKey (typeof(object)) &&
-                    custom_importers_table[typeof(object)].ContainsKey (
-                        inst_type)) {
-
-                    ImporterFunc importer =
-                        custom_importers_table[typeof(object)][inst_type];
-
+            } 
+			else if (reader.Token == JsonToken.ObjectStart) 
+			{	
+				System.Type init_type = inst_type;
+				if(inst_type.IsAbstract)
+				{
+					Dictionary<string, System.Type> childTypes = ReflectionUtils.GetChildTypes(inst_type);	
+					while(reader.Read() && reader.Token != JsonToken.PropertyName);
 					
+					if(childTypes.ContainsKey(reader.Value.ToString()))
+					{
+                        inst_type = childTypes[reader.Value.ToString()];
+					}
+					else
+					{
+						throw new JsonException (String.Format ("Attempting to deserialize JSON of type '{0}'. However, the type '{1}' doesn't inherit from the abstract type '{2}'", inst_type, reader.Value, inst_type));
+					}
 					
-                    return importer (reader.Value);
-                }
+					while(reader.Read() && reader.Token != JsonToken.ObjectStart);
+				}
 				
                 AddObjectMetadata (inst_type);
                 ObjectMetadata t_data = object_metadata[inst_type];
 				             
 				instance = Activator.CreateInstance (inst_type);
 
-                while (true) {
+                while (true) 
+				{
                     reader.Read ();
 
                     if (reader.Token == JsonToken.ObjectEnd)
-                        break;
+					{
+						if(init_type != inst_type)
+							while(reader.Read() && reader.Token != JsonToken.ObjectEnd);
+				
+						break;
+					}
 
                     string property = (string) reader.Value;
-
-                    if (t_data.Properties.ContainsKey (property)) {
+					
+                    if (t_data.Properties.ContainsKey (property)) 
+					{
                         PropertyMetadata prop_data =
                             t_data.Properties[property];
 
@@ -490,7 +504,9 @@ namespace LitJson
                                 ReadValue (prop_data.Type, reader);
                         }
 
-                    } else {
+                    } 
+					else 
+					{
                         if (! t_data.IsDictionary) {
 
                             if (! reader.SkipNonMembers) {
@@ -503,11 +519,11 @@ namespace LitJson
                                 continue;
                             }
                         }
+						
                         ((IDictionary) instance).Add (
                             property, ReadValue (
                                 t_data.ElementType, reader));
                     }
-
                 }
 
             }
@@ -821,9 +837,18 @@ namespace LitJson
             }
 
             if (obj is IList) {
-                writer.WriteArrayStart ();
+				Type valueType = obj.GetType().GetGenericArguments()[0];
+				writer.WriteArrayStart ();
                 foreach (object elem in (IList) obj)
-                    WriteValue (elem, writer, writer_is_private, depth + 1);
+					if(!valueType.IsAbstract)
+						WriteValue (elem, writer, writer_is_private, depth + 1);
+					else
+					{
+						writer.WriteObjectStart();
+						writer.WritePropertyName(elem.GetType().ToString());
+	                    WriteValue (elem, writer, writer_is_private, depth + 1);						
+						writer.WriteObjectEnd();						
+					}
                 writer.WriteArrayEnd ();
 
                 return;
@@ -831,10 +856,23 @@ namespace LitJson
 
             if (obj is IDictionary) {
                 writer.WriteObjectStart ();
-                foreach (DictionaryEntry entry in (IDictionary) obj) {
+				IDictionary dict = (IDictionary) obj;
+				Type valueType = obj.GetType().GetGenericArguments()[1];
+                foreach (DictionaryEntry entry in dict) {
+					//This next line means we can't have anything but base types as keys. Love, Mark
                     writer.WritePropertyName ((string) entry.Key);
-                    WriteValue (entry.Value, writer, writer_is_private,
-                                depth + 1);
+					if(!valueType.IsAbstract)
+					{
+	                    WriteValue (entry.Value, writer, writer_is_private, depth + 1);
+					}
+					else
+					{
+						//Creates a second layer that stores the child type key of the object for decoding
+						writer.WriteObjectStart();
+						writer.WritePropertyName(entry.Value.GetType().ToString());
+	                    WriteValue (entry.Value, writer, writer_is_private, depth + 1);						
+						writer.WriteObjectEnd();
+					}
                 }
                 writer.WriteObjectEnd ();
 
@@ -875,6 +913,7 @@ namespace LitJson
 
             // Okay, so it looks like the input should be exported as an
             // object
+				
 	        AddTypeProperties (obj_type);
             IList<PropertyMetadata> props = type_properties[obj_type];
 			
@@ -882,7 +921,7 @@ namespace LitJson
             foreach (PropertyMetadata p_data in props) 
 			{
 				bool skip = false;
-				Object[] attrs = p_data.Info.GetCustomAttributes(false);
+				System.Object[] attrs = p_data.Info.GetCustomAttributes(false);
 				if(attrs.Length > 0)
 				{
 					for(int j = 0; j < attrs.Length; j++)
@@ -899,23 +938,42 @@ namespace LitJson
 				
                 if (p_data.IsField) {
                     writer.WritePropertyName (p_data.Info.Name);
-                    WriteValue (((FieldInfo) p_data.Info).GetValue (obj),
+					FieldInfo f_info = ((FieldInfo) p_data.Info);
+					if(f_info.FieldType.IsAbstract)
+					{
+						writer.WriteObjectStart();
+						writer.WritePropertyName(f_info.GetValue(obj).GetType().ToString());
+						depth++;
+					}
+                    
+					WriteValue (((FieldInfo) p_data.Info).GetValue (obj),
                                 writer, writer_is_private, depth + 1);
+					
+					if(f_info.FieldType.IsAbstract)
+					{
+            			writer.WriteObjectEnd ();
+					}
                 }
                 else {
                     PropertyInfo p_info = (PropertyInfo) p_data.Info;
-
-                    if (p_info.CanRead) {
+					
+                    if (p_info.CanRead) 
+					{
                         writer.WritePropertyName (p_data.Info.Name);
-						/*UnityEngine.Debug.Log (p_data.Info.Name);
-						if(p_data.Info.Name == "position")
-							UnityEngine.Debug.Log (p_data.Info.Name);
-							
-						if(!obj.Equals(null))
-							WriteValue (p_info.GetValue (obj, null), writer, writer_is_private, depth + 1);  
-						else
-							WriteValue ("", writer, writer_is_private, depth + 1);  */
-						WriteValue (p_info.GetValue (obj, null), writer, writer_is_private, depth + 1);  
+						
+						if(p_info.PropertyType.IsAbstract)
+						{
+							writer.WriteObjectStart();
+							writer.WritePropertyName(p_info.GetValue(obj, null).GetType().ToString());
+							depth++;
+						}
+						
+						WriteValue (p_info.GetValue (obj, null), writer, writer_is_private, depth + 1); 
+						
+						if(p_info.PropertyType.IsAbstract)
+						{
+	            			writer.WriteObjectEnd ();
+						}
                     }
                 }
             }

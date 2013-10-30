@@ -42,7 +42,7 @@ public class ADAGEUploadFileJob : WebJob
 		{
 			byte[] compressed = GZipStream.CompressString(data);
 			
-			request = new HTTP.Request("Post", this.url + "/data_collector.json", compressed);
+			request = new HTTP.Request("Post", this.url + "/data_collector", compressed);
 			request.AddHeader("Content-Type", "application/jsonrequest");
 			request.AddHeader("Content-Encoding", "gzip");
 			request.AddHeader("Authorization", "Bearer " + ADAGE.AuthenticationParameters["adage_access_token"]);
@@ -101,7 +101,7 @@ public class ADAGEUploadJob : WebJob
 		Debug.Log("TRYING TO PUSH DATA: ADAGE online: " + ADAGE.Online);
 		if(ADAGE.Online)
 		{
-			request = new HTTP.Request("Post", this.url + "/data_collector.json");
+			request = new HTTP.Request("Post", this.url + "/data_collector");
 			request.AddHeader("Content-Type", "application/jsonrequest");
 			request.AddHeader("Authorization", "Bearer " + ADAGE.user.adageAccessToken);
 			request.SetText(json);

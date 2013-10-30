@@ -16,7 +16,7 @@ public class ADAGEData
 	public string session_token { get; set;}
 	public List<string> ada_base_types { get; set;}
 	public string key { get; set; } 
-	
+
 	
 	public static ADAGEData CreateFromJSON(string json)
 	{	
@@ -59,7 +59,7 @@ public class ADAGEData
 		this.session_token = data.session_token;
 		this.ada_base_types = data.ada_base_types;
 		this.key = data.key;	
-		
+
 	}
 	
 	//TODO: Can we reflect here?
@@ -68,6 +68,22 @@ public class ADAGEData
 
 public class ADAGEStartGame : ADAGEPlayerEvent {}
 public class ADAGEQuitGame : ADAGEPlayerEvent {}
+
+public class ADAGEScreenshot : ADAGEData
+{
+	public string cameraName;	
+	public byte[] shot;
+	
+	public ADAGEScreenshot()
+	{
+		cameraName = "";	
+	}
+	
+	public ADAGEScreenshot(string source)
+	{
+		cameraName = source;	
+	}
+}
 
 public class ADAGEVirtualContext
 {
