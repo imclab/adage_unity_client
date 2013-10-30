@@ -1,9 +1,23 @@
+#define FACEBOOK_SUPPORT 
 using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using LitJson;
 using System.IO;
+
+public class ADAGEAccessTokenResponse
+{
+	public string access_token;
+}
+
+public class ADAGEUserResponse
+{
+	public string provider;
+	public string uid;
+	public string player_name;
+	public string email;
+}
 
 public class UploadWrapper
 {
@@ -81,7 +95,9 @@ public class ADAGE : MonoBehaviour
 	
 	public static readonly string productionURL = "https://adage.gameslearningsociety.org";
 	public static readonly string developmentURL = "http://ada.dev.eriainteractive.com";
+	//public static readonly string developmentURL = "http://10.129.22.43:3000";
 	public static readonly string stagingURL = "https://adage.gameslearningsociety.org";
+	
 		
 	public static bool Staging
     {
@@ -97,6 +113,14 @@ public class ADAGE : MonoBehaviour
 		{
 			return instance.isOnline;
 		}
+    }
+	
+	public static bool UserIsValid
+    {
+		get
+		{
+			return user.valid();
+		}
     }	
 	
 	public static ADAGEGameInfo GameInfo
@@ -107,17 +131,8 @@ public class ADAGE : MonoBehaviour
 		}
 	}
 	
-	public static Dictionary<string, string> AuthenticationParameters
-	{
-		get 
-		{
-			return new Dictionary<string, string> 
-			{ 
-				//{ "auth_token", "7FiB9FPAxyrMGwgKiUU3" } 
-				{ "auth_token", "SsTx2yApqSnev1tsXiSX" }
-			};
-		}
-	}
+	public static Dictionary<string, string> AuthenticationParameters = new Dictionary<string, string>();
+
 	
 	public static ADAGEVirtualContext VirtualContext
 	{
@@ -135,9 +150,15 @@ public class ADAGE : MonoBehaviour
 		}
 	}
 	
+		
 	public bool staging = false;
 	public ADAGEGameInfo gameInfo;
 	public int pushRate = 5;
+	public string appToken;
+	public string appSecret;
+	
+	public string devToken = "foo";
+	public string devSecret = "bar";
 	
 	[HideInInspector]
 	public string dataPath = "";
@@ -145,9 +166,11 @@ public class ADAGE : MonoBehaviour
 	private static ADAGE instance;
 
 	private bool isOnline = false;
-	private ADAGEUser user;
+	public static ADAGEUser user = new ADAGEUser();
 	private string currentSession;
-	
+	private string statusMessage = "Offline";
+	public static string userNameField = "";
+	public static string passwordField = "";
 	private WorkerPool threads;	
 	private UploadWrapper dataWrapper;
 	private UploadWrapper localWrapper;
@@ -155,6 +178,8 @@ public class ADAGE : MonoBehaviour
 	
 	private ADAGEVirtualContext vContext;
 	private ADAGEPositionalContext pContext;
+	
+
 	
 	public static void LogData<T>(T data) where T:ADAGEData
 	{
@@ -184,11 +209,100 @@ public class ADAGE : MonoBehaviour
 		instance.pContext.setPosition(pos.x, pos.y, pos.z);
 		instance.pContext.setRotation(rot.x, rot.y, rot.z);
 	}
+
+	
+	public static void LoginPlayer(string playerName, string password)
+	{
+		//instance.AddConnectionJob(playerName, password);
+		instance.AddConnectionJob("ztest", "zisnogood");
+	}
+	
+	public static void RegisterPlayer(string playerName, string password, string passwordConfirm)
+	{
+		
+	}
+	
+	//This will create an anonymous yet unique guest login
+	public static void ConnectAsGuest()
+	{
+		
+	}
+	
+	public static string GetStatusMessage()
+	{
+		return instance.statusMessage;	
+	}
+
+#if FACEBOOK_SUPPORT
+	//Structure returned by the FB login call
+	public class FBLoginResponse
+	{
+		public bool is_logged_in;
+		public string user_id;
+		public string access_token;
+	}
+	
+	//Structure returned by the call to get /me from the FB graph API
+	public class FBProfileInfo
+	{
+		public string id;
+		public int timezone;
+		public string username;
+		public string link;
+		public string locale;
+		public string last_name;
+		public string email;
+		public bool verified;
+		public string gender;
+		public string name;
+		public string first_name;
+		public DateTime updated_time;
+	}
+	
+	//Since currently I can't get the real full auth response from the FB SDK
+	//construct a fake one!
+	public class FakebookInfo
+	{
+		public string username;
+		public string email;
+	}
+	public class FakebookCredentials
+	{
+		public string token;
+		public string expires_at;
+	}
+	public class FakebookAuthResponse
+	{
+		public FakebookInfo raw_info;
+		public FakebookInfo info;
+		public string uid;
+		public string provider = "facebook";
+		public FakebookCredentials credentials;
+		
+		public FakebookAuthResponse()
+		{
+			raw_info = new FakebookInfo();
+			info = new FakebookInfo();
+			credentials = new FakebookCredentials();
+		}
+	}
+	
+	
+	
+	public static void ConnectToFacebook()
+	{
+		instance.BeginFacebookAuth();	
+	}
+#endif
+	
 	
 	public void Awake()
 	{
-		if(instance != null)
+		if(instance != null) 
+		{
 			Debug.LogWarning("You have multiple copies of the ADAGE object running. Overriding...");
+		}
+		DontDestroyOnLoad(this);
 		instance = this;
 		
 		threads = new WorkerPool(3);
@@ -198,7 +312,7 @@ public class ADAGE : MonoBehaviour
 		
 		if(dataPath == "")
 		{
-			dataPath = "ADAGE/Data/";	
+			dataPath = "/ADAGE/Data/";	
 		}
 		else
 		{
@@ -207,44 +321,54 @@ public class ADAGE : MonoBehaviour
 				dataPath += "/";
 			}
 		}
+		
+		
+		
 	}
 	
 	public void Start()
 	{	
-		/*Vector3 jungle = new Vector3(0, 158, 96);
-		Vector3 forest = new Vector3(49, 120, 115);
-		Vector3 hunter = new Vector3(53, 94, 59);
-		Debug.Log (jungle.magnitude);
-		Debug.Log (forest.magnitude);
-		Debug.Log (hunter.magnitude);*/
+
+		
+		
+		
 		ADAGEStartGame s = new ADAGEStartGame();
-		ADAGEStartGame s2 = new ADAGEStartGame();
 		Debug.Log(s);
 		
 		//Start the session
 		currentSession = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
 		
 		//Temp
-		isOnline = true;
+		isOnline = false;
 		
-		//Push any local data to the server
-		PushLocalToOnline();
+	
+		//if we are in the editor we are going to use the dev server credentials for this app
+		if(Application.isEditor)
+		{
+			appToken = devToken;
+			appSecret = devSecret;
+		}
+		//LoginPlayer("", "");
+		//ConnectToFacebook();
 				
 		//Temp
 		UpdatePositionalContext(Vector3.zero,Vector3.zero);
 		ADAGEStartGame log_start = new ADAGEStartGame();
 		LogData<ADAGEStartGame>(log_start);
+		
 	}
-	
+
 	public void Update()
 	{
-		CheckThreads();
+		CheckThreads();		
+		
 	}
 	
 	public void FixedUpdate()
 	{
 		float elapsedTime = Time.time - lastPush;
-		if((elapsedTime > pushRate) && dataWrapper.Count != 0)
+		Debug.Log("ONLINE: " + isOnline);
+		if((elapsedTime > pushRate) && dataWrapper.Count != 0 && isOnline)
 		{
 			lastPush = Time.time;
 			AddLogJob();
@@ -275,7 +399,7 @@ public class ADAGE : MonoBehaviour
 		{
 			//Do local write
 			string outgoingData = JsonMapper.ToJson(localWrapper);
-			string path = Application.dataPath + dataPath + ADAGE.AuthenticationParameters["auth_token"] + "/";
+			string path = Application.dataPath + dataPath + ADAGE.AuthenticationParameters["adage_access_token"] + "/";
 			if(!Directory.Exists(path))
 			{
 				Directory.CreateDirectory(path);
@@ -301,8 +425,12 @@ public class ADAGE : MonoBehaviour
 			(data as ADAGEEventData).Update();
 		
 		data.gameName = ADAGE.GameInfo.name;
-		data.gameVersion = ADAGE.GameInfo.version;
-		data.timestamp = System.DateTime.Now.ToUniversalTime().ToString();
+		data.gameVersion = appToken;
+		if(Application.isEditor)
+		{
+			data.gameVersion = ADAGE.GameInfo.development_version;
+		}
+		data.timestamp = convertDateTimeToEpoch(System.DateTime.Now.ToUniversalTime()).ToString();
 		data.session_token = currentSession;
 		data.key = data.GetType().ToString();
 		
@@ -317,6 +445,73 @@ public class ADAGE : MonoBehaviour
 		dataWrapper.Add(data);
 	}
 	
+	//This looks to see if a player was previously logged in and will try to reconnect them if 
+	private void SearchForPreviousPlayer()
+	{
+		
+		//if this is a web build then look for credentials passed in from the website
+		if(Application.isWebPlayer)
+		{
+			Application.ExternalCall("GetAccessToken");
+		}
+		else
+		{
+			LoadUserInfo();
+		}
+		
+		
+		
+		
+	}
+	
+	private void SaveUserInfo()
+	{
+		string userData = JsonMapper.ToJson(user);
+		string path = Application.dataPath + "session.info";
+		System.IO.File.WriteAllText(path, userData);
+		
+	}
+	
+	private void LoadUserInfo()
+	{
+		if(File.Exists(Application.dataPath + "session.info"))
+		{
+			string sessionInfo = File.ReadAllText(Application.dataPath + "session.info");	
+			user = JsonMapper.ToObject<ADAGEUser>(sessionInfo);
+		}
+		
+	}
+	
+	private void ListenForAccessToken(string incoming){
+		if(incoming != "invalid")
+		{
+			user.adageAccessToken = incoming;
+			//try to connect and get user info
+			AddUserRequestJob();
+			
+		}
+	}
+	
+	private void AddConnectionJob(string name, string password)
+	{
+		statusMessage = "Connecting...";
+		ADAGEConnectionJob job = new ADAGEConnectionJob(appToken, appSecret, name, password);
+		job.OnComplete = OnConnectionComplete;
+		threads.AddJob(job);
+
+	}
+		
+	private void AddUserRequestJob()
+	{
+		statusMessage = "Requesting player info...";
+		Debug.Log(statusMessage);
+		//Now make a call to get the User info
+		ADAGERequestUserJob rjob = new ADAGERequestUserJob(user.adageAccessToken);
+		rjob.OnComplete = OnRequestUserComplete;
+		threads.AddJob(rjob);
+
+	}
+	
 	private void AddLogJob()
 	{				
 		ADAGEUploadJob job = new ADAGEUploadJob(dataWrapper);
@@ -329,7 +524,7 @@ public class ADAGE : MonoBehaviour
 	private void OnComplete(Job job)
 	{
 		ADAGEUploadJob upload = (job as ADAGEUploadJob);
-	
+
 		if(upload.Status != 302)  //NEEDS TO CHANGE TO 200 SOMEDAY
 		{
 			Debug.Log ("Adding Data to Local Wrapper");
@@ -342,6 +537,47 @@ public class ADAGE : MonoBehaviour
 		
 		Debug.Log (upload.Status);	
 		Debug.Log (upload.Output);	
+	}
+
+	private void OnConnectionComplete(Job job)
+	{
+		ADAGEConnectionJob connection = (job as ADAGEConnectionJob);
+		Debug.Log(connection.status);
+		
+		if(connection.status != 200) 
+		{
+			Debug.Log("What we have here is a FAILURE to authenticate!");
+			statusMessage = "Could not connect";
+			return;
+		}
+		
+		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
+		user.adageAccessToken = accessResponse.access_token;
+		Debug.Log (accessResponse.access_token);
+		DebugEx.Log("Successfully authenticated with ADAGE."); 
+
+		
+		AddUserRequestJob();
+	}
+	
+	private void OnRequestUserComplete(Job job)
+	{
+		ADAGERequestUserJob connection = (job as ADAGERequestUserJob);
+
+		if(connection.status != 200)  
+		{
+			Debug.Log("Request adage User failed!");
+			return;
+		}
+
+		Debug.Log(connection.status);
+		user.playerName = connection.userResponse.player_name;
+		user.adageId = connection.userResponse.uid;
+		
+		isOnline = true;
+		statusMessage = user.playerName;
+		//SaveUserInfo();
+		PushLocalToOnline();
 	}
 	
 	private void OnLocalUploadComplete(Job job)
@@ -402,4 +638,108 @@ public class ADAGE : MonoBehaviour
 			}
 		}
 	}
+	
+#if FACEBOOK_SUPPORT
+	private void BeginFacebookAuth()
+	{
+		Debug.Log("called FB Init");
+		FB.Init(OnFBInitComplete);	
+		
+		
+	}
+	
+	private void OnFBInitComplete()
+	{
+		Debug.Log("FB Init complete...Login starting");
+		FB.Login("email", OnFBLoginComplete);
+		
+	}
+	
+	private void OnFBLoginComplete(FBResult response)
+	{
+		Debug.Log("FB Access token: " + FB.AccessToken);
+		Debug.Log("FB Uid: " + FB.UserId);
+		Debug.Log("FB response: " + response.Text);
+		
+		FBLoginResponse info =  JsonMapper.ToObject<FBLoginResponse>(response.Text);
+		user.fbAccessToken = info.access_token;
+		
+		FB.API("/me", Facebook.HttpMethod.GET, OnFBUserInfo);
+		//FB.GetAuthResponse(OnAuthResponse);
+	}
+	
+	private void OnFBUserInfo(FBResult response)
+	{
+		Debug.Log("FB User Info... ");
+		Debug.Log("FB response: " + response.Text);
+		
+		FBProfileInfo info = JsonMapper.ToObject<FBProfileInfo>(response.Text);
+		Debug.Log("Look a valid email account! " + info.email);
+		user.email = info.email;
+		user.playerName = info.name;
+		user.username = info.username;
+		user.facebookId = info.id;
+		//user.adageExpiresAt = 
+		FBAuthWithAdage();
+		
+		
+	}
+	
+	private void OnFBConnectionComplete(Job job)
+	{
+		ADAGEFacebookConnectionJob connection = (job as ADAGEFacebookConnectionJob);
+		Debug.Log(connection.status);
+		
+		if(connection.status != 200) 
+		{
+			Debug.Log("What we have here is a FAILURE to authenticate!");
+			statusMessage = "Could not connect";
+			return;
+		}
+		
+		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
+		user.adageAccessToken = accessResponse.access_token;
+		Debug.Log (accessResponse.access_token);
+		DebugEx.Log("Successfully authenticated with ADAGE."); 
+
+		
+		AddUserRequestJob();
+	}
+	
+	private void OnAuthResponse(FBResult response)
+	{
+		Debug.Log("FB auth response " + response.Text);	
+	}
+	
+	
+	//This function takes info supplied by the iOS FB Oauth and constructs an Oauth like response 
+	//that is sent to ADAGE to authenticate the user. This path will create an ADAGE user for 
+	//the FB email if none already exists.
+	private void FBAuthWithAdage()
+	{
+		FakebookAuthResponse cookie = new FakebookAuthResponse();
+		cookie.credentials.token = user.fbAccessToken;
+		cookie.credentials.expires_at = "";
+		cookie.info.email = user.email;
+		cookie.raw_info.username = user.username;
+		cookie.uid = user.facebookId;
+		statusMessage = "Connection...";
+		Debug.Log("Starting Auth with ADAGE");
+		ADAGEFacebookConnectionJob job = new ADAGEFacebookConnectionJob(appToken, appSecret, cookie);
+		job.OnComplete = OnFBConnectionComplete;
+		threads.AddJob(job);
+		
+	}
+
+#endif
+	
+	public static long convertDateTimeToEpoch(DateTime time)
+	{
+   		DateTime epoch = new DateTime(1970, 1, 1);
+
+    	TimeSpan ts = time - epoch;
+    	return (long) ts.Ticks/ 10;
+	}
+
+	
 }

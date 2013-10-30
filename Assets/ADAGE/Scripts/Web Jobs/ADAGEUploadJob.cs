@@ -15,11 +15,11 @@ public class ADAGEUploadFileJob : WebJob
 		
 	public ADAGEUploadFileJob(string token, string filepath, string text)
 	{
-		this.authToken = token;
+		
 		this.Path = filepath;
 		this.data = text;
 		
-		if(Application.isEditor)
+		if(Application.isEditor || Debug.isDebugBuild)
 		{
 			if(ADAGE.Staging)
 			{
@@ -45,7 +45,9 @@ public class ADAGEUploadFileJob : WebJob
 			request = new HTTP.Request("Post", this.url + "/data_collector.json", compressed);
 			request.AddHeader("Content-Type", "application/jsonrequest");
 			request.AddHeader("Content-Encoding", "gzip");
-			request.AddParameter("auth_token", authToken);
+			request.AddHeader("Authorization", "Bearer " + ADAGE.AuthenticationParameters["adage_access_token"]);
+			Debug.Log(request.GetHeader("Authorization"));
+			//request.AddParameter("auth_token", authToken);
 			request.Send();
 			
 			//Error Handling - Server constantly sending 404
@@ -96,13 +98,16 @@ public class ADAGEUploadJob : WebJob
 	{	
 		string json = JsonMapper.ToJson(this.data);
 		
+		Debug.Log("TRYING TO PUSH DATA: ADAGE online: " + ADAGE.Online);
 		if(ADAGE.Online)
 		{
 			request = new HTTP.Request("Post", this.url + "/data_collector.json");
 			request.AddHeader("Content-Type", "application/jsonrequest");
-			request.AddParameters(ADAGE.AuthenticationParameters);
+			request.AddHeader("Authorization", "Bearer " + ADAGE.user.adageAccessToken);
 			request.SetText(json);
 			request.Send();
+
+			Debug.Log(request.uri + " " + json);
 			
 			//Error Handling - Server constantly sending 404
 			Status = request.response.status;

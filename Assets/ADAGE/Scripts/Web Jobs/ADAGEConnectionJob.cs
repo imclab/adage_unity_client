@@ -1,95 +1,215 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using LitJson;
+
+
 
 public class ADAGEConnectionJob: WebJob
 {	
 	private string email;
 	private string password;
+
+	private string clientId = "";
+	private string clientSecret = "";
+
+	public int status = 0;
+	public string response = "Nothing";
+	
 		
-	public ADAGEConnectionJob(string email, string password)
+	public ADAGEConnectionJob(string clientId, string clientSecret, string email, string password)
 	{
 		this.email = email;
 		this.password = password;
+		this.clientId = clientId;
+		this.clientSecret = clientSecret;
+
+		if(Application.isEditor || Debug.isDebugBuild)
+		{
+			if(ADAGE.Staging)
+			{
+				this.url = ADAGE.stagingURL;	
+			}
+			else
+			{
+				this.url = ADAGE.developmentURL;	
+			}
+		}
+		else
+		{
+			this.url = ADAGE.productionURL;	
+		}		
 	}
 	
 	public override void Main(WorkerPool boss = null) 
 	{	
-		if(!ADAGE.Online)
-		{
-			//string json = JsonMapper.ToJson();
+		
+		//First we authorize the client 
+		HTTP.Request request = new HTTP.Request ("GET", this.url + "/auth/authorize_unity");
+		request.AddParameter("client_id", this.clientId);
+		request.AddParameter("client_secret", this.clientSecret);
+		request.AddParameter("email", this.email);
+		request.AddParameter("password", this.password);
+		request.AddParameter("grant_type", "password");
+
+		// Add request headers
+		request.AddHeader ("Content-Type", "application/x-www-form-urlencoded");
+		
+		// Send request
+		request.Send();
+		
+		Debug.Log(request.uri);
 			
+	
+		// Dump request response to debug console
+		status = request.response.status;
+		response = request.response.Text;
+		Debug.Log (response);
 			
-			
-			/*if(webMessage.error == WebErrorCode.Error)
-	        {
-	            status = webMessage.extendedError;
-				//The server is down - off the user the option to play offline
-				if(status.Contains("503"))
-				{
-					UserManager.isOnline = false;
-					state = AuthStatus.NO_NET;
-				}
-				if(status.Contains("401"))
-				{
-					status = "PLAYER NOT FOUND!";
-					state = AuthStatus.AUTHENTICATION_COMPLETE;
-					UserManager.isOnline = false;
-					yield return 0;
-				}
-				if(status.Contains("500"))
-				{
-					status = "PLAYER NOT FOUND!";
-					state = AuthStatus.AUTHENTICATION_COMPLETE;
-					UserManager.isOnline = false;
-					yield return 0;
-				}
-				if(status.Contains("Invalid email"))
-				{
-					status = "PLAYER NOT FOUND!";
-					state = AuthStatus.AUTHENTICATION_COMPLETE;
-					UserManager.isOnline = false;
-					yield return 0;
-				}
-				//if we are trying to sign in silently and get ANY error just abort the login
-				if(silentSignin)
-				{
-					UserManager.isOnline = false;
-					state = AuthStatus.NO_NET;
-				}
-	            yield break;
-	        }	*/
-		}				
+
+		
+
+		
+
+						
 				
 		if(boss != null)
 			boss.CompleteJob(this);
     }
 
-/*status = "Trying to login...";
-WebMessage webMessage = new WebMessage();
-Debug.Log(status);
-yield return StartCoroutine(webMessage.Post(loginURL, 
-                                            "email", loginName,
-                                            "password", loginPassword));
-
-// deserialize the login JSON text
-//
-try 
-{
-	Debug.Log(webMessage.www.text);
-	UserManager.userInfo = JsonMapper.ToObject<UserData>(webMessage.www.text);
-	UserManager.isOnline = true;
-	UserManager.isLoggedIn = true;
-	UserManager.playerName = loginName;
 }
-catch(JsonException)
-{
-    if(webMessage.error == WebErrorCode.None)
+
+public class ADAGERequestUserJob: WebJob
+{	
+
+	public int status;
+	public string response = "Nothing";
+	public ADAGEUserResponse userResponse;
+	private string access_token; 
+		
+	public ADAGERequestUserJob(string access_token)
 	{
-		UserManager.isOnline = false;
-		state = AuthStatus.NO_NET;
-		yield break;
+		this.access_token = access_token;
+	
+		if(Application.isEditor || Debug.isDebugBuild)
+		{
+			if(ADAGE.Staging)
+			{
+				this.url = ADAGE.stagingURL;	
+			}
+			else
+			{
+				this.url = ADAGE.developmentURL;	
+			}
+		}
+		else
+		{
+			this.url = ADAGE.productionURL;	
+		}		
 	}
-}*/
+	
+	public override void Main(WorkerPool boss = null) 
+	{	
+		request = new HTTP.Request("Get", this.url + "/auth/unity_user.json");
+		request.AddHeader("Content-Type", "application/jsonrequest");
+		request.AddHeader("Authorization", "Bearer " + access_token);
+		request.Send();
+
+		Debug.Log(request.uri);
+			
+			
+		status = request.response.status;
+		response = request.response.Text;
+		Debug.Log (response);
+		if(status == 200) 
+		{
+			userResponse = JsonMapper.ToObject<ADAGEUserResponse>(request.response.Text);
+			DebugEx.Log("Successfully requested ADAGE user info for " + userResponse.player_name ); 
+		}
+			
+				
+		if(boss != null)
+			boss.CompleteJob(this);
+    }
+
+}
+
+
+public class ADAGEFacebookConnectionJob: WebJob
+{	
+
+
+	public int status;
+	public string response = "Nothing";
+	
+	private string clientId = "";
+	private string clientSecret = "";
+	
+	private ADAGE.FakebookAuthResponse cookie;
+	
+	
+	
+
+		
+	public ADAGEFacebookConnectionJob(string clientId, string clientSecret, ADAGE.FakebookAuthResponse cookie)
+	{
+		this.clientId = clientId;
+		this.clientSecret = clientSecret;
+		this.cookie = cookie;
+		
+		
+		if(Application.isEditor || Debug.isDebugBuild)
+		{
+			if(ADAGE.Staging)
+			{
+				this.url = ADAGE.stagingURL;	
+			}
+			else
+			{
+				this.url = ADAGE.developmentURL;	
+			}
+		}
+		else
+		{
+			this.url = ADAGE.productionURL;	
+		}		
+	}
+	
+	public override void Main(WorkerPool boss = null) 
+	{	
+	
+			
+		HTTP.Request request = new HTTP.Request ("GET", this.url + "/auth/authorize_unity_fb");
+			
+		request.AddParameter("client_id", this.clientId);
+		request.AddParameter("client_secret", this.clientSecret);
+		request.AddParameter("grant_type", "fakebook");
+		request.AddHeader("omniauth.auth", JsonMapper.ToJson(cookie));
+			
+
+		// Add request headers
+		request.AddHeader ("Content-Type", "application/x-www-form-urlencoded");
+		
+		Debug.Log(request.uri);
+		// Send request
+		request.Send ();
+		
+			
+	
+			// Dump request response to debug console
+			
+		status = request.response.status;
+		response = request.response.Text;
+		Debug.Log ("RESPONSE ***********************************: " + response);
+			
+		
+
+
+				
+				
+		if(boss != null)
+			boss.CompleteJob(this);
+    }
+
 }

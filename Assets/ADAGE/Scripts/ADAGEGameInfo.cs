@@ -2,5 +2,5 @@
 public class ADAGEGameInfo
 {
 	public string name = "";
-	public string version = "";	
+	public string development_version = "";	
 }

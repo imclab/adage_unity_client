@@ -210,6 +210,7 @@ namespace HTTP
         	        		SetHeader("Host", uri.Host);
         	        		var client = new TcpClient ();
         	        		client.Connect (uri.Host, uri.Port);
+
 							using (var stream = client.GetStream ()) {
         	        			var ostream = stream as Stream;
         	        			if(uri.Scheme.ToLower() == "https") {
@@ -228,7 +229,7 @@ namespace HTTP
         	        			response.ReadFromStream(ostream);
         	        		}
         	        		client.Close ();
-        	        		/*switch (response.status) {
+        	        		switch (response.status) {
         	        		case 307:
         	        		case 302:
         	        		case 301:
@@ -237,7 +238,7 @@ namespace HTTP
         	        		default:
         	        			retry = maximumRetryCount;
         	        		    break;
-        	        		}*/
+        	        		}
         	        	}
         	        	if (useCache) {
         	        		string etag = response.GetHeader("etag");
@@ -249,7 +250,14 @@ namespace HTTP
         	        	Console.WriteLine("Unhandled Exception, aborting request.");
         	        	Console.WriteLine(e);
         	        	exception = e;
-        	        	response = null;
+				//GLS BEGIN - ams
+        	        	//response = null;
+						Debug.Log("Unhandled Exception, aborting request: " + e.Message);
+						response = new Response();
+						response.message = e.Message;
+						response.status = 0;
+						
+				//GLS END
         	        }
         	        state = RequestState.Done;
         	        isDone = true;
