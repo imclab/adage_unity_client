@@ -195,16 +195,21 @@ namespace HTTP
 			Debug.Log("sending");
         	isDone = false;
         	state = RequestState.Waiting;
-        	if (acceptGzip) {
+        	if (acceptGzip)
+			{
         		SetHeader( "Accept-Encoding", "gzip" );
 			}
         	//ThreadPool.QueueUserWorkItem (new WaitCallback (delegate(object t) {
-        	        try {
+        	        try
+					{
         	        	var retry = 0;
-        	        	while (++retry < maximumRetryCount) {
-        	        		if (useCache) {
+        	        	while (++retry < maximumRetryCount)
+						{
+        	        		if (useCache) 
+							{
         	        			string etag = "";
-        	        			if (etags.TryGetValue (uri.AbsoluteUri, out etag)) {
+        	        			if (etags.TryGetValue (uri.AbsoluteUri, out etag)) 
+								{
         	        				SetHeader( "If-None-Match", etag );
         	        			}
         	        		}
@@ -212,14 +217,19 @@ namespace HTTP
         	        		var client = new TcpClient ();
         	        		client.Connect (uri.Host, uri.Port);
 
-							using (var stream = client.GetStream ()) {
+							using (var stream = client.GetStream ()) 
+							{
         	        			var ostream = stream as Stream;
-        	        			if(uri.Scheme.ToLower() == "https") {
+        	        			if(uri.Scheme.ToLower() == "https") 
+								{
         	        				ostream = new SslStream (stream, false, new RemoteCertificateValidationCallback (ValidateServerCertificate));
-        	        				try {
+        	        				try 
+									{
         	        					var ssl = ostream as SslStream;
         	        				    ssl.AuthenticateAsClient (uri.Host);
-        	        				} catch (Exception e) {
+        	        				} 
+									catch (Exception e) 
+									{
         	        				    Debug.LogError("Exception: " + e.Message);
         	        				    return;
         	        				}
@@ -230,10 +240,10 @@ namespace HTTP
         	        			response.ReadFromStream(ostream);
         	        		}
         	        		client.Close ();
+					
+        	        		switch (response.status) 
+							{
 
-        	        		switch (response.status) {
-
-        	        		retry = maximumRetryCount;
         	        		case 307:
         	        		case 302:
         	        		case 301:

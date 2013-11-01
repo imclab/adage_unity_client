@@ -125,7 +125,7 @@ public class ADAGERequestUserJob: WebJob
 		if(status == 200) 
 		{
 			userResponse = JsonMapper.ToObject<ADAGEUserResponse>(request.response.Text);
-			DebugEx.Log("Successfully requested ADAGE user info for " + userResponse.player_name ); 
+			Debug.Log("Successfully requested ADAGE user info for " + userResponse.player_name ); 
 		}
 			
 				
@@ -136,6 +136,7 @@ public class ADAGERequestUserJob: WebJob
 }
 
 
+#if FACEBOOK_SUPPORT
 public class ADAGEFacebookConnectionJob: WebJob
 {	
 
@@ -213,3 +214,4 @@ public class ADAGEFacebookConnectionJob: WebJob
     }
 
 }
+#endif

@@ -1,4 +1,4 @@
-#define FACEBOOK_SUPPORT 
+//#define FACEBOOK_SUPPORT 
 using UnityEngine;
 using System;
 using System.Collections;
@@ -593,7 +593,7 @@ public class ADAGE : MonoBehaviour
 		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
 		user.adageAccessToken = accessResponse.access_token;
 		Debug.Log (accessResponse.access_token);
-		DebugEx.Log("Successfully authenticated with ADAGE."); 
+		Debug.Log("Successfully authenticated with ADAGE."); 
 
 		
 		AddUserRequestJob();
