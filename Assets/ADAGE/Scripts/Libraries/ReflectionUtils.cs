@@ -1,5 +1,8 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 public static class ReflectionUtils {
 	public static bool	TypeContainsAttributes( Type type, params Type[] attributes ) {
@@ -40,5 +43,21 @@ public static class ReflectionUtils {
 		bool subclass = a.IsSubclassOf(b);
 		bool same = (a == b);
 		return subclass || same;	
+	}
+	
+	public static Dictionary<string, System.Type> GetChildTypes<T>()
+	{
+		return GetChildTypes(typeof(T));
+	}
+	
+	public static Dictionary<string, System.Type> GetChildTypes(System.Type baseType)
+	{
+		List<Type> types = Assembly.GetAssembly(baseType).GetTypes().Where(type => type.IsSubclassOf(baseType)).ToList();
+		Dictionary<string, System.Type> output = new Dictionary<string, System.Type>();
+		foreach(Type child in types)
+		{
+			output.Add(child.ToString(), child);
+		}
+		return output;
 	}
 }
