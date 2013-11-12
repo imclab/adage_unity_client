@@ -17,6 +17,7 @@ public class ADAGEUserResponse
 	public string uid;
 	public string player_name;
 	public string email;
+	public bool guest;
 }
 
 public class UploadWrapper
@@ -94,8 +95,7 @@ public class ADAGE : MonoBehaviour
 	public static string VERSION = "drunken_dolphin";
 	
 	public static readonly string productionURL = "https://adage.gameslearningsociety.org";
-	public static readonly string developmentURL = "http://ada.dev.eriainteractive.com";
-	//public static readonly string developmentURL = "http://10.129.22.43:3000";
+	public static readonly string developmentURL = "http://gls-devel-1.discovery.wisc.edu:9003";
 	public static readonly string stagingURL = "https://adage.gameslearningsociety.org";
 	
 		
@@ -249,15 +249,15 @@ public class ADAGE : MonoBehaviour
 		instance.AddConnectionJob("ztest", "zisnogood");
 	}
 	
-	public static void RegisterPlayer(string playerName, string password, string passwordConfirm)
+	public static void RegisterPlayer(string playerName, string email, string password, string passwordConfirm)
 	{
-		
+		instance.AddRegistrationJob(playerName, email, password, passwordConfirm);
 	}
 	
 	//This will create an anonymous yet unique guest login
 	public static void ConnectAsGuest()
 	{
-		
+		instance.AddGuestConnectionJob();
 	}
 	
 	public static string GetStatusMessage()
@@ -505,17 +505,20 @@ public class ADAGE : MonoBehaviour
 	private void SaveUserInfo()
 	{
 		string userData = JsonMapper.ToJson(user);
-		string path = Application.dataPath + "session.info";
+		string path = Application.dataPath + "/session.info";
 		System.IO.File.WriteAllText(path, userData);
 		
 	}
 	
 	private void LoadUserInfo()
 	{
-		if(File.Exists(Application.dataPath + "session.info"))
+		Debug.Log("Loading User info...");
+		if(File.Exists(Application.dataPath + "/session.info"))
 		{
 			string sessionInfo = File.ReadAllText(Application.dataPath + "session.info");	
 			user = JsonMapper.ToObject<ADAGEUser>(sessionInfo);
+			//request user info to make sure we actually can connect
+			AddUserRequestJob();
 		}
 		
 	}
@@ -537,6 +540,22 @@ public class ADAGE : MonoBehaviour
 		job.OnComplete = OnConnectionComplete;
 		threads.AddJob(job);
 
+	}
+	
+	private void AddGuestConnectionJob()
+	{
+		statusMessage = "Connecting as guest...";
+		ADAGEGuestConnectionJob job = new ADAGEGuestConnectionJob(appToken, appSecret);
+		job.OnComplete = OnGuestConnectionComplete;
+		threads.AddJob(job);
+	}
+	
+	private void AddRegistrationJob(string name, string email, string password, string passwordConfirm)
+	{
+		statusMessage = "Connecting as guest...";
+		ADAGERegistrationJob job = new ADAGERegistrationJob(appToken, appSecret, name, email, password, passwordConfirm);
+		job.OnComplete = OnRegistrationComplete;
+		threads.AddJob(job);
 	}
 		
 	private void AddUserRequestJob()
@@ -593,7 +612,49 @@ public class ADAGE : MonoBehaviour
 		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
 		user.adageAccessToken = accessResponse.access_token;
 		Debug.Log (accessResponse.access_token);
-		Debug.Log("Successfully authenticated with ADAGE."); 
+		DebugEx.Log("Successfully authenticated with ADAGE."); 
+
+		
+		AddUserRequestJob();
+	}
+	
+	private void OnGuestConnectionComplete(Job job)
+	{
+		ADAGEGuestConnectionJob connection = (job as ADAGEGuestConnectionJob);
+		Debug.Log(connection.status);
+		
+		if(connection.status != 200) 
+		{
+			Debug.Log("What we have here is a FAILURE to authenticate!");
+			statusMessage = "Could not connect";
+			return;
+		}
+		
+		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
+		user.adageAccessToken = accessResponse.access_token;
+		Debug.Log (accessResponse.access_token);
+		DebugEx.Log("Successfully authenticated with ADAGE."); 
+
+		
+		AddUserRequestJob();
+	}
+	
+	private void OnRegistrationComplete(Job job)
+	{
+		ADAGERegistrationJob connection = (job as ADAGERegistrationJob);
+		Debug.Log(connection.status);
+		
+		if(connection.status != 200) 
+		{
+			Debug.Log("What we have here is a FAILURE to authenticate!");
+			statusMessage = "Could not connect";
+			return;
+		}
+		
+		ADAGEAccessTokenResponse accessResponse = JsonMapper.ToObject<ADAGEAccessTokenResponse>(connection.response);
+		user.adageAccessToken = accessResponse.access_token;
+		Debug.Log (accessResponse.access_token);
+		Debug.Log("Successfully registered and authenticated with ADAGE."); 
 
 		
 		AddUserRequestJob();
@@ -612,10 +673,11 @@ public class ADAGE : MonoBehaviour
 		Debug.Log(connection.status);
 		user.playerName = connection.userResponse.player_name;
 		user.adageId = connection.userResponse.uid;
+		user.guest = connection.userResponse.guest;
 		
 		isOnline = true;
 		statusMessage = user.playerName;
-		//SaveUserInfo();
+		SaveUserInfo();
 		PushLocalToOnline();
 	}
 	
@@ -623,7 +685,7 @@ public class ADAGE : MonoBehaviour
 	{
 		ADAGEUploadFileJob upload = (job as ADAGEUploadFileJob);
 		
-		if(upload.Status == 201)
+		if(upload.Status == 200)
 		{
 			File.Delete(upload.Path);	
 		}

@@ -14,6 +14,7 @@ public class ADAGEUser
 		fbAccessToken = "EMPTY";
 		fbExpiresAt = new DateTime();
 		adageExpiresAt = new DateTime();
+		guest = false;
 	}
 	public string playerName {get; set;} //what to display on the UI
 	public string username {get; set; } //what the unique user name is. With FB username can be different from playerName
@@ -23,6 +24,7 @@ public class ADAGEUser
 	public string adageRefreshToken { get; set; }
 	public string fbAccessToken {get; set; }
 	public string facebookId {get; set;}
+	public bool guest {get; set;}
 	
 	
 	public DateTime fbExpiresAt {get; set; }
